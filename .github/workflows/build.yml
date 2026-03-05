@@ -60,3 +60,4 @@ jobs:
         with:
           name: VoltageOS-Tetris-Slim
           path: out/target/product/Tetris/VoltageOS*.zip
+# Heartbeat update to trigger workflow detection
