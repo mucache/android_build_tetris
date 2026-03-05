@@ -18,11 +18,12 @@ jobs:
           echo "${HOME}/bin" >> $GITHUB_PATH
 
       - name: Create crave.conf
-        env:
-          CRAVE_USERNAME: ${{ secrets.CRAVE_USERNAME }}
-          CRAVE_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          printf "{\n  "username": "$CRAVE_USERNAME",\n  "token": "$CRAVE_TOKEN",\n  "server": "https://foss.crave.io/api"\n}" > crave.conf
+          echo "{
+  "username": "${{ secrets.CRAVE_USERNAME }}",
+  "token": "${{ secrets.CRAVE_TOKEN }}",
+  "server": "https://foss.crave.io/api"
+}" > crave.conf
 
       - name: Run Build
         run: |
