@@ -1,6 +1,8 @@
 name: Crave ROM Builder
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
