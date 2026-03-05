@@ -3,19 +3,7 @@
   <!-- Unique Remote Definitions -->
   <remote name="github_valt" fetch="https://github.com/" />
 
-  <!-- THE NUCLEAR STRIKE: FIXING THE NAMES -->
-  <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
-  <remove-project name="platform/external/robolectric" />
-  <remove-project name="platform/prebuilts/android-emulator" />
-  <remove-project name="platform/prebuilts/sdk" />
-  <remove-project name="platform/prebuilts/rust" />
-  <remove-project name="platform/prebuilts/go/linux-x86" />
-  <remove-project name="platform/prebuilts/go/darwin-x86" />
-  <remove-project name="platform/external/pdfium" />
-  <remove-project name="platform/external/chromium-webview" />
-  <remove-project name="platform/prebuilts/maven_repo/android" />
-
-  <!-- CMF Phone 1 Parts -->
+  <!-- CMF Phone 1 Parts (No problematic removals here) -->
   <project name="valt-x/device_nothing_tetris" path="device/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
   <project name="valt-x/android_device_nothing_Tetris-kernel" path="device/nothing/Tetris-kernel" remote="github_valt" revision="lineage-23.2" />
   <project name="valt-x/vendor_nothing_Tetris" path="vendor/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
