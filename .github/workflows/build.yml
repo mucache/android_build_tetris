@@ -28,13 +28,14 @@ jobs:
           MY_KEY: ${{ secrets.GH_TOKEN }}
         run: |
           export PATH=$PATH:$HOME/bin
-          repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2
+          # Initialize with SHALLOW CLONE (--depth=1) to save disk space and time
+          repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2 --depth=1
           
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
           
-          # Removed incompatible --progress flag
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
+          # Using current-branch and no-clone-bundle to save space
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
 
       - name: Build ROM
         run: |
