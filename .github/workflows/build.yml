@@ -29,7 +29,7 @@ jobs:
           git config --global user.name "valt-x"
           git config --global user.email "valtaoi@example.com"
 
-      - name: Sync Slim Manifest
+      - name: Sync Slim Manifest (No-Checkout Hack)
         env:
           MY_KEY: ${{ secrets.GH_TOKEN }}
         run: |
@@ -37,16 +37,16 @@ jobs:
           repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2 --depth=1 --partial-clone --clone-filter=blob:limit=10M --groups=all,-notdefault,-device,-darwin,-x86,-mips
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
           
-          # HACK: Manual deletion of huge folders to free up 60GB before building
-          echo "Deleting huge unneeded folders..."
+          # HACK: Sync without checking out files first (saves 50% disk during download)
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch -n
+          
+          # Now checkout only what we need
+          echo "Checking out files (Selective)..."
+          repo sync -l -j$(nproc --all)
+          
+          # HACK: Kill .repo immediately after extraction to free 40GB
           rm -rf .repo
-          rm -rf external/chromium-webview
-          rm -rf prebuilts/rust
-          rm -rf prebuilts/go
-          rm -rf prebuilts/gcc
-          rm -rf external/pdfium
 
       - name: Build ROM (Fast Mode)
         run: |
