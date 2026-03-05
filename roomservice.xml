@@ -1,9 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
-  <!-- Unique Remote Definitions -->
   <remote name="github_valt" fetch="https://github.com/" />
 
-  <!-- CMF Phone 1 Parts (No problematic removals here) -->
+  <!-- THE EXTERMINATOR: KILL ALL NON-LINUX / NON-TETRIS PROJECTS -->
+  
+  <!-- Remove Darwin/Mac junk -->
+  <remove-project name="platform/prebuilts/clang/host/darwin-x86" />
+  <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
+  <remove-project name="platform/prebuilts/python/darwin-x86" />
+  <remove-project name="platform/prebuilts/go/darwin-x86" />
+  
+  <!-- Remove Emulator & Cuttlefish (Massive) -->
+  <remove-project name="platform/device/google/cuttlefish" />
+  <remove-project name="platform/device/google/cuttlefish_prebuilts" />
+  <remove-project name="platform/device/google/cuttlefish_vmm" />
+  <remove-project name="platform/prebuilts/android-emulator" />
+  
+  <!-- Remove Unneeded prebuilts -->
+  <remove-project name="platform/prebuilts/rust" />
+  <remove-project name="platform/prebuilts/go/linux-x86" />
+  <remove-project name="platform/external/chromium-webview" />
+  <remove-project name="platform/external/pdfium" />
+  <remove-project name="platform/prebuilts/sdk" />
+  <remove-project name="platform/prebuilts/jdk/jdk8" />
+  <remove-project name="platform/prebuilts/jdk/jdk11" />
+  
+  <!-- Remove other hardware (We only need MediaTek) -->
+  <remove-project name="platform/hardware/qcom/audio" />
+  <remove-project name="platform/hardware/qcom/display" />
+  <remove-project name="platform/hardware/qcom/media" />
+  <remove-project name="platform/hardware/samsung/nfc" />
+
+  <!-- CMF Phone 1 Parts -->
   <project name="valt-x/device_nothing_tetris" path="device/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
   <project name="valt-x/android_device_nothing_Tetris-kernel" path="device/nothing/Tetris-kernel" remote="github_valt" revision="lineage-23.2" />
   <project name="valt-x/vendor_nothing_Tetris" path="vendor/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
