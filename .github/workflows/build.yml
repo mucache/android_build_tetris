@@ -7,6 +7,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout the build config
+        uses: actions/checkout@v4
+
       - name: Cleanup Space
         run: |
           sudo rm -rf /usr/share/dotnet /etc/mysql /usr/local/lib/android
@@ -25,9 +28,14 @@ jobs:
           MY_KEY: ${{ secrets.GH_TOKEN }}
         run: |
           export PATH=$PATH:$HOME/bin
+          # Initialize the master manifest
           repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2
+          
+          # Copy the CMF Phone 1 "Shopping List Add-on"
           mkdir -p .repo/local_manifests
-          cp roomservice.xml .repo/local_manifests/
+          cp roomservice.xml .repo/local_manifests/tetris.xml
+          
+          # Sync the 150GB
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Build ROM
