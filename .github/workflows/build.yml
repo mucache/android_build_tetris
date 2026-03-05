@@ -33,8 +33,8 @@ jobs:
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
           
-          # Added --progress and limited jobs to 4 to prevent hanging
-          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune --progress
+          # Removed incompatible --progress flag
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
 
       - name: Build ROM
         run: |
