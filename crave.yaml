@@ -1,0 +1,21 @@
+project: voltage
+
+# Pull your 3 repos into the Crave workspace
+manifest:
+  projects:
+    - name: valt-x/device_nothing_tetris
+      path: device/nothing/Tetris
+      revision: lineage-23.2
+    - name: valt-x/android_device_nothing_Tetris-kernel
+      path: device/nothing/Tetris-kernel
+      revision: lineage-23.2
+    - name: valt-x/vendor_nothing_Tetris
+      path: vendor/nothing/Tetris
+      revision: lineage-23.2
+
+# The build commands
+build:
+  commands: |
+    source build/envsetup.sh
+    lunch lineage_Tetris-userdebug
+    mka bacon

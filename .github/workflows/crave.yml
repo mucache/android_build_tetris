@@ -1,0 +1,29 @@
+name: Build on Crave
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Crave
+        run: |
+          mkdir -p ${HOME}/bin
+          curl -sL https://raw.githubusercontent.com/accupara/crave/master/get_crave.sh | bash -s --
+          mv crave ${HOME}/bin/
+          echo "${HOME}/bin" >> $GITHUB_PATH
+
+      - name: Create crave.conf
+        env:
+          CRAVE_USERNAME: ${{ secrets.CRAVE_USERNAME }}
+          CRAVE_TOKEN: ${{ secrets.CRAVE_TOKEN }}
+        run: |
+          printf "{\n  "username": "$CRAVE_USERNAME",\n  "token": "$CRAVE_TOKEN",\n  "server": "https://foss.crave.io/api"\n}" > crave.conf
+
+      - name: Run Build
+        run: |
+          crave run --clean
