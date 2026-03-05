@@ -7,9 +7,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout build config
-        uses: actions/checkout@v4
-
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -20,6 +17,9 @@ jobs:
           remove-haskell: "true"
           remove-codeql: "true"
           remove-docker-images: "true"
+
+      - name: Checkout build config
+        uses: actions/checkout@v4
 
       - name: Setup Build Tools
         run: |
@@ -35,9 +35,12 @@ jobs:
         run: |
           export PATH=$PATH:$HOME/bin
           repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2 --depth=1 --partial-clone --clone-filter=blob:limit=10M --groups=all,-notdefault,-device,-darwin,-x86,-mips
+          
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
+          
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
+          
           # HACK: Delete .repo to save 60GB
           rm -rf .repo
 
