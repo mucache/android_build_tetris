@@ -10,10 +10,16 @@ jobs:
       - name: Checkout build config
         uses: actions/checkout@v4
 
-      - name: Cleanup Space
-        run: |
-          sudo rm -rf /usr/share/dotnet /etc/mysql /usr/local/lib/android
-          sudo apt-get clean
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 1024
+          temp-reserve-mb: 512
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
 
       - name: Setup Repo & Git
         run: |
@@ -28,13 +34,13 @@ jobs:
           MY_KEY: ${{ secrets.GH_TOKEN }}
         run: |
           export PATH=$PATH:$HOME/bin
-          # Initialize with SHALLOW CLONE (--depth=1) to save disk space and time
+          # Shallow clone to save maximum space
           repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2 --depth=1
           
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
           
-          # Using current-branch and no-clone-bundle to save space
+          # Very lean sync
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
 
       - name: Build ROM
