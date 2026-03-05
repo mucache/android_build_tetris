@@ -3,13 +3,14 @@
   <!-- Unique Remote Definitions -->
   <remote name="github_valt" fetch="https://github.com/" />
 
-  <!-- NUCLEAR SURGICAL STRIKE: REMOVE ABSOLUTELY EVERYTHING NON-ESSENTIAL -->
+  <!-- THE NUCLEAR STRIKE: FIXING THE NAMES -->
   <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
   <remove-project name="platform/external/robolectric" />
   <remove-project name="platform/prebuilts/android-emulator" />
   <remove-project name="platform/prebuilts/sdk" />
   <remove-project name="platform/prebuilts/rust" />
-  <remove-project name="platform/prebuilts/go" />
+  <remove-project name="platform/prebuilts/go/linux-x86" />
+  <remove-project name="platform/prebuilts/go/darwin-x86" />
   <remove-project name="platform/external/pdfium" />
   <remove-project name="platform/external/chromium-webview" />
   <remove-project name="platform/prebuilts/maven_repo/android" />
