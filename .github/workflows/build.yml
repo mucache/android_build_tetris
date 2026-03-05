@@ -1,0 +1,43 @@
+name: Build VoltageOS 16.2 (Tetris)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /etc/mysql /usr/local/lib/android
+          sudo apt-get clean
+
+      - name: Setup Repo & Git
+        run: |
+          mkdir ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          git config --global user.name "valt-x"
+          git config --global user.email "valtaoi@example.com"
+
+      - name: Sync Manifest
+        env:
+          MY_KEY: ${{ secrets.GH_TOKEN }}
+        run: |
+          export PATH=$PATH:$HOME/bin
+          repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2
+          mkdir -p .repo/local_manifests
+          cp roomservice.xml .repo/local_manifests/
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Build ROM
+        run: |
+          source build/envsetup.sh
+          lunch lineage_Tetris-userdebug
+          mka bacon -j$(nproc --all)
+
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoltageOS-16.2-Tetris
+          path: out/target/product/Tetris/VoltageOS*.zip
