@@ -17,17 +17,25 @@ jobs:
           mv crave ${HOME}/bin/
           echo "${HOME}/bin" >> $GITHUB_PATH
 
-      - name: Create crave.conf (Valid JSON Hack)
+      - name: Create crave.conf (Pro Method)
         env:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}, indent=2))" > ${HOME}/crave.conf
-          # Also put a copy in current dir just in case
-          cp ${HOME}/crave.conf crave.conf
+          # Create perfectly formatted JSON
+          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}))" > ${HOME}/crave.conf
+          # Create all possible variations the tool might look for
+          cp ${HOME}/crave.conf ${HOME}/.crave.conf
+          cp ${HOME}/crave.conf ${GITHUB_WORKSPACE}/crave.conf
+          cp ${HOME}/crave.conf ${GITHUB_WORKSPACE}/.crave.conf
+
+      - name: Verify Config (Debug)
+        run: |
+          echo "Checking for config files..."
+          ls -la ${HOME} | grep crave
+          ls -la ${GITHUB_WORKSPACE} | grep crave
 
       - name: Run Build
         run: |
-          # Run from home to ensure config detection
-          cd ${HOME}
-          crave run --clean --project ${GITHUB_WORKSPACE}/crave.yaml
+          # Run directly from the project folder
+          crave run --clean
