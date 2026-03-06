@@ -17,16 +17,17 @@ jobs:
           mv crave ${HOME}/bin/
           echo "${HOME}/bin" >> $GITHUB_PATH
 
-      - name: Create crave.conf
+      - name: Create crave.conf (Valid JSON Hack)
+        env:
+          C_USER: ${{ secrets.CRAVE_USERNAME }}
+          C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          cat <<EOF > crave.conf
-          {
-            "username": "${{ secrets.CRAVE_USERNAME }}",
-            "token": "${{ secrets.CRAVE_TOKEN }}",
-            "server": "https://foss.crave.io/api"
-          }
-          EOF
+          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}, indent=2))" > ${HOME}/crave.conf
+          # Also put a copy in current dir just in case
+          cp ${HOME}/crave.conf crave.conf
 
       - name: Run Build
         run: |
-          crave run --clean
+          # Run from home to ensure config detection
+          cd ${HOME}
+          crave run --clean --project ${GITHUB_WORKSPACE}/crave.yaml
