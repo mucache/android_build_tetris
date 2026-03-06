@@ -17,16 +17,16 @@ jobs:
           mv crave ${HOME}/bin/
           echo "${HOME}/bin" >> $GITHUB_PATH
 
-      - name: Create crave.conf (Minimalist Hack)
+      - name: Create crave.conf (Flat Format Fix)
         env:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          # Try without /api suffix which is often the cause of header errors
-          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io'''}))" > ${HOME}/crave.conf
+          # The Crave tool EXPECTS a flat JSON with 'username' and 'token'
+          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN''']}))" > ${HOME}/crave.conf
           cp ${HOME}/crave.conf ${HOME}/.crave.conf
 
       - name: Run Build
         run: |
-          # Use the --project flag explicitly to avoid directory confusion
-          crave run --clean --project voltage
+          # Pass the config explicitly with -c to be 100% sure
+          crave -c ${HOME}/crave.conf run --clean
