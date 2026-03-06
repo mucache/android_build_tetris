@@ -1,32 +1,25 @@
-name: HexDroid Trigger
+name: HexDroid Surface Build
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  trigger:
+  surface-build:
     runs-on: ubuntu-latest
     steps:
-      - name: Force Start Build
-        env:
-          HEX_TOKEN: ${{ secrets.HEXDROID_TOKEN }}
+      - name: Checkout local blueprints
+        uses: actions/checkout@v4
+
+      - name: Install HexDroid Surface CLI (hexd)
         run: |
-          python3 -c "
-import http.client, json, os
-conn = http.client.HTTPSConnection('api.hexdroid.com')
-payload = json.dumps({'project': 'Tetris-Build', 'branch': 'main'})
-headers = {
-    'Authorization': f'Bearer {os.environ[''HEX_TOKEN'']}',
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-}
-conn.request('POST', '/v1/builds', payload, headers)
-res = conn.getresponse()
-data = res.read()
-print(f'Status: {res.status}')
-print(f'Response: {data.decode()}')
-if res.status not in [200, 201, 202]:
-    exit(1)
-"
+          curl -sL https://hexdroid.com/api/v1/cli/install | bash
+          sudo mv hexd /usr/local/bin/hexd
+
+      - name: Surface to Cloud
+        env:
+          HEX_edgeKey: ${{ secrets.HEXDROID_TOKEN }}
+        run: |
+          # Surface the current directory to HexDroid servers
+          # --metrics=1 enables live tracking on your dashboard
+          # The build will follow the instructions in hexdroid.yaml
+          hexd --surface --project Tetris-Build --metrics=1 --selinux=1
