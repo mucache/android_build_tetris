@@ -14,8 +14,9 @@ jobs:
         env:
           HEXDROID_TOKEN: ${{ secrets.HEXDROID_TOKEN }}
         run: |
-          # Using the HexDroid API to start the build
-          curl -X POST -H "Authorization: Bearer $HEXDROID_TOKEN" \
+          # Added -i to see headers and server response
+          curl -i -X POST -H "Authorization: Bearer $HEXDROID_TOKEN" \
+               -H "Accept: application/json" \
                -H "Content-Type: application/json" \
                -d '{"project": "Tetris-Build", "branch": "main"}' \
                https://api.hexdroid.com/v1/builds
