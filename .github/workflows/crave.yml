@@ -13,7 +13,6 @@ jobs:
       - name: Set up Crave
         run: |
           mkdir -p ${HOME}/bin
-          # Official stable binary download
           curl -sL https://raw.githubusercontent.com/accupara/crave/master/get_crave.sh | bash -s --
           sudo mv crave /usr/local/bin/crave
 
@@ -22,12 +21,20 @@ jobs:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          # Standard stable FOSS config format
-          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}))" > ${HOME}/crave.conf
-          cp ${HOME}/crave.conf .crave.conf
+          # Use a Heredoc to ensure NO special characters are lost
+          cat <<EOF > ${HOME}/crave.conf
+          {
+            "username": "$C_USER",
+            "token": "$C_TOKEN",
+            "server": "https://foss.crave.io/api"
+          }
+          EOF
+          # Create the hidden version as well
+          cp ${HOME}/crave.conf ${HOME}/.crave.conf
 
       - name: Run Build
         run: |
-          # The tool sometimes requires a 'crave stop' before 'run' to clear old sessions
-          crave stop || true
+          # Check if the tool is alive first
+          crave version || true
+          # Run the build
           crave run --clean
