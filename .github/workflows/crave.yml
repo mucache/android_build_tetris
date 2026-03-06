@@ -17,13 +17,19 @@ jobs:
           mv crave ${HOME}/bin/
           echo "${HOME}/bin" >> $GITHUB_PATH
 
-      - name: Create crave.conf (Full Format Fix)
+      - name: Debug Crave Tool
+        run: |
+          crave version
+          crave help || true
+
+      - name: Create crave.conf (Full JSON Hack)
         env:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          # The FOSS tool needs username, token, AND server to find the build cluster
-          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}))" > ${HOME}/crave.conf
+          # Create the EXACT structure you provided earlier
+          # This includes the 'headers' object which might be what the tool is looking for
+          python3 -c "import json, os; print(json.dumps({'username': os.environ['C_USER'], 'headers': {'Authorization': os.environ['C_TOKEN']}, 'server': 'https://foss.crave.io/api'}))" > ${HOME}/crave.conf
           cp ${HOME}/crave.conf ${HOME}/.crave.conf
 
       - name: Run Build
