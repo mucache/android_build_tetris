@@ -17,25 +17,16 @@ jobs:
           mv crave ${HOME}/bin/
           echo "${HOME}/bin" >> $GITHUB_PATH
 
-      - name: Create crave.conf (Pro Method)
+      - name: Create crave.conf (Minimalist Hack)
         env:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          # Create perfectly formatted JSON
-          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}))" > ${HOME}/crave.conf
-          # Create all possible variations the tool might look for
+          # Try without /api suffix which is often the cause of header errors
+          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io'''}))" > ${HOME}/crave.conf
           cp ${HOME}/crave.conf ${HOME}/.crave.conf
-          cp ${HOME}/crave.conf ${GITHUB_WORKSPACE}/crave.conf
-          cp ${HOME}/crave.conf ${GITHUB_WORKSPACE}/.crave.conf
-
-      - name: Verify Config (Debug)
-        run: |
-          echo "Checking for config files..."
-          ls -la ${HOME} | grep crave
-          ls -la ${GITHUB_WORKSPACE} | grep crave
 
       - name: Run Build
         run: |
-          # Run directly from the project folder
-          crave run --clean
+          # Use the --project flag explicitly to avoid directory confusion
+          crave run --clean --project voltage
