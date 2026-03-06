@@ -13,25 +13,21 @@ jobs:
       - name: Set up Crave
         run: |
           mkdir -p ${HOME}/bin
+          # Official stable binary download
           curl -sL https://raw.githubusercontent.com/accupara/crave/master/get_crave.sh | bash -s --
-          mv crave ${HOME}/bin/
-          echo "${HOME}/bin" >> $GITHUB_PATH
+          sudo mv crave /usr/local/bin/crave
 
-      - name: Debug Crave Tool
-        run: |
-          crave version
-          crave help || true
-
-      - name: Create crave.conf (Full JSON Hack)
+      - name: Create crave.conf
         env:
           C_USER: ${{ secrets.CRAVE_USERNAME }}
           C_TOKEN: ${{ secrets.CRAVE_TOKEN }}
         run: |
-          # Create the EXACT structure you provided earlier
-          # This includes the 'headers' object which might be what the tool is looking for
-          python3 -c "import json, os; print(json.dumps({'username': os.environ['C_USER'], 'headers': {'Authorization': os.environ['C_TOKEN']}, 'server': 'https://foss.crave.io/api'}))" > ${HOME}/crave.conf
-          cp ${HOME}/crave.conf ${HOME}/.crave.conf
+          # Standard stable FOSS config format
+          python3 -c "import json, os; print(json.dumps({'''username''': os.environ['''C_USER'''], '''token''': os.environ['''C_TOKEN'''], '''server''': '''https://foss.crave.io/api'''}))" > ${HOME}/crave.conf
+          cp ${HOME}/crave.conf .crave.conf
 
       - name: Run Build
         run: |
-          crave -c ${HOME}/crave.conf run --clean
+          # The tool sometimes requires a 'crave stop' before 'run' to clear old sessions
+          crave stop || true
+          crave run --clean
