@@ -1,8 +1,6 @@
 name: Crave ROM Builder
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -11,5 +9,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Debug
-        run: echo "Workflow triggered successfully"
+
+      - name: Set up Crave
+        run: |
+          mkdir -p ${HOME}/bin
+          curl -sL https://raw.githubusercontent.com/accupara/crave/master/get_crave.sh | bash -s --
+          mv crave ${HOME}/bin/
+          echo "${HOME}/bin" >> $GITHUB_PATH
+
+      - name: Create crave.conf
+        run: |
+          cat <<EOF > crave.conf
+          {
+            "username": "${{ secrets.CRAVE_USERNAME }}",
+            "token": "${{ secrets.CRAVE_TOKEN }}",
+            "server": "https://foss.crave.io/api"
+          }
+          EOF
+
+      - name: Run Build
+        run: |
+          crave run --clean
