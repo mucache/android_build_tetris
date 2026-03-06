@@ -1,27 +1,15 @@
-version: "1.0"
-project: Tetris-Build
+name: Tetris-Build
 
-stages:
-  - name: Build
-    steps:
-      - name: Sync VoltageOS
-        aosp:
-          manifest:
-            url: https://github.com/mucache/manifest
-            branch: 16.2
-          snippets:
-            - name: tetris.xml
-              content: |
-                <?xml version="1.0" encoding="UTF-8"?>
-                <manifest>
-                  <remote name="github_valt" fetch="https://github.com/" />
-                  <project name="valt-x/device_nothing_tetris" path="device/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
-                  <project name="valt-x/android_device_nothing_Tetris-kernel" path="device/nothing/Tetris-kernel" remote="github_valt" revision="lineage-23.2" />
-                  <project name="valt-x/vendor_nothing_Tetris" path="vendor/nothing/Tetris" remote="github_valt" revision="lineage-23.2" />
-                </manifest>
+on:
+  push:
+    branches:
+      - main
 
-      - name: Compile ROM
-        run: |
-          source build/envsetup.sh
-          lunch lineage_Tetris-userdebug
-          mka bacon -j$(nproc --all)
+# This tells HexDroid what to do on its own servers
+build:
+  engine: aosp
+  config:
+    manifest_url: https://github.com/mucache/manifest
+    manifest_branch: 16.2
+    device: lineage_Tetris-userdebug
+    command: mka bacon
