@@ -1,12 +1,15 @@
 version: "1.0"
 project: Tetris-Build
 
-# Manual build step for older HexDroid FOSS accounts
+# Using the specialized SURFACE engine for local-to-cloud builds
+engine: surface
+
+# Build instructions
 build:
   steps:
     - name: Fetch
       run: repo init -u https://github.com/mucache/manifest -b 16.2 --depth=1 && repo sync -c -j8
-    - name: Link
+    - name: Overlay
       run: mkdir -p .repo/local_manifests && curl -s https://raw.githubusercontent.com/mucache/android_build_tetris/main/roomservice.xml > .repo/local_manifests/tetris.xml && repo sync
-    - name: Cook
+    - name: Bake
       run: source build/envsetup.sh && lunch lineage_Tetris-userdebug && mka bacon
