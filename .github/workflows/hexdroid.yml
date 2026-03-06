@@ -1,0 +1,21 @@
+name: Build on HexDroid
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger HexDroid Build
+        env:
+          HEXDROID_TOKEN: ${{ secrets.HEXDROID_TOKEN }}
+        run: |
+          # Using the HexDroid API to start the build
+          curl -X POST -H "Authorization: Bearer $HEXDROID_TOKEN" \
+               -H "Content-Type: application/json" \
+               -d '{"project": "Tetris-Build", "branch": "main"}' \
+               https://api.hexdroid.com/v1/builds
