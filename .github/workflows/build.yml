@@ -1,63 +1,32 @@
-name: Build VoltageOS 16.2 (Optimized)
+name: HexDroid Trigger
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
+  trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Maximize Build Space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 1024
-          temp-reserve-mb: 512
-          remove-dotnet: "true"
-          remove-android: "true"
-          remove-haskell: "true"
-          remove-codeql: "true"
-          remove-docker-images: "true"
-
-      - name: Checkout build config
-        uses: actions/checkout@v4
-
-      - name: Setup Build Tools
-        run: |
-          mkdir ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          git config --global user.name "valt-x"
-          git config --global user.email "valtaoi@example.com"
-
-      - name: Sync Slim Manifest (No-Checkout Hack)
+      - name: Force Start Build
         env:
-          MY_KEY: ${{ secrets.GH_TOKEN }}
+          HEX_TOKEN: ${{ secrets.HEXDROID_TOKEN }}
         run: |
-          export PATH=$PATH:$HOME/bin
-          repo init -u https://x-access-token:$MY_KEY@github.com/mucache/manifest.git -b 16.2 --depth=1 --partial-clone --clone-filter=blob:limit=10M --groups=all,-notdefault,-device,-darwin,-x86,-mips
-          mkdir -p .repo/local_manifests
-          cp $GITHUB_WORKSPACE/roomservice.xml .repo/local_manifests/tetris.xml
-          
-          # HACK: Sync without checking out files first (saves 50% disk during download)
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch -n
-          
-          # Now checkout only what we need
-          echo "Checking out files (Selective)..."
-          repo sync -l -j$(nproc --all)
-          
-          # HACK: Kill .repo immediately after extraction to free 40GB
-          rm -rf .repo
-
-      - name: Build ROM (Fast Mode)
-        run: |
-          source build/envsetup.sh
-          lunch lineage_Tetris-userdebug
-          export WITH_DEXPREOPT=false
-          mka bacon -j$(nproc --all)
-
-      - name: Upload Build
-        uses: actions/upload-artifact@v4
-        with:
-          name: VoltageOS-Tetris-Slim
-          path: out/target/product/Tetris/VoltageOS*.zip
-# Heartbeat update to trigger workflow detection
+          python3 -c "
+import http.client, json, os
+conn = http.client.HTTPSConnection('api.hexdroid.com')
+payload = json.dumps({'project': 'Tetris-Build', 'branch': 'main'})
+headers = {
+    'Authorization': f'Bearer {os.environ[''HEX_TOKEN'']}',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+}
+conn.request('POST', '/v1/builds', payload, headers)
+res = conn.getresponse()
+data = res.read()
+print(f'Status: {res.status}')
+print(f'Response: {data.decode()}')
+if res.status not in [200, 201, 202]:
+    exit(1)
+"
