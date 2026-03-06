@@ -1,15 +1,12 @@
-name: Tetris-Build
+version: "1.0"
+project: Tetris-Build
 
-on:
-  push:
-    branches:
-      - main
-
-# This tells HexDroid what to do on its own servers
+# Manual build step for older HexDroid FOSS accounts
 build:
-  engine: aosp
-  config:
-    manifest_url: https://github.com/mucache/manifest
-    manifest_branch: 16.2
-    device: lineage_Tetris-userdebug
-    command: mka bacon
+  steps:
+    - name: Fetch
+      run: repo init -u https://github.com/mucache/manifest -b 16.2 --depth=1 && repo sync -c -j8
+    - name: Link
+      run: mkdir -p .repo/local_manifests && curl -s https://raw.githubusercontent.com/mucache/android_build_tetris/main/roomservice.xml > .repo/local_manifests/tetris.xml && repo sync
+    - name: Cook
+      run: source build/envsetup.sh && lunch lineage_Tetris-userdebug && mka bacon
