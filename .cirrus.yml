@@ -21,3 +21,4 @@ task:
     - source build/envsetup.sh
     - lunch lineage_Tetris-userdebug
     - mka bacon
+# Triggering Cirrus CI Build
