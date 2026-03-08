@@ -30,16 +30,15 @@ jobs:
 
       - name: Setup Rclone & Mount Drive
         env:
-          RCLONE_CONF: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
-          # Using printf is safer for long secrets with special characters
-          printf "%s" "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          # Decode the Base64 secret into the config file
+          echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
           
           # Verify the config is valid before proceeding
           if ! rclone listremotes | grep -q "gdrive:"; then
             echo "ERROR: Rclone config is invalid or remote 'gdrive' not found!"
-            cat ~/.config/rclone/rclone.conf # This will be masked in logs, but helps debugging
             exit 1
           fi
 
