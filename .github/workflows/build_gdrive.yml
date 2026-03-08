@@ -36,38 +36,28 @@ jobs:
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
           sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
           
-          mkdir -p ~/gdrive_mount
-          # Mount GDrive
-          rclone mount gdrive: ~/gdrive_mount \
-            --vfs-cache-mode writes \
-            --vfs-cache-max-size 60G \
+          mkdir -p ~/android
+          
+          # Mount GDrive with --links to support symlinks directly on GDrive
+          # --vfs-cache-mode full: Required for random access
+          # --vfs-cache-max-size 25G: Keeps the local cache small so the runner doesn't crash
+          rclone mount gdrive: ~/android \
+            --vfs-cache-mode full \
+            --vfs-cache-max-size 25G \
+            --vfs-cache-max-age 1h \
+            --links \
             --allow-other \
+            --buffer-size 64M \
             --daemon
           
           # Wait for mount
           for i in {1..20}; do
-            if df -h | grep -q "gdrive_mount"; then
+            if df -h | grep -q "/home/runner/android"; then
               echo "Drive mounted successfully!"
               break
             fi
             sleep 5
           done
-
-      - name: Create and Mount Virtual Disk
-        run: |
-          IMG_PATH=~/gdrive_mount/voltage_disk.img
-          MOUNT_PATH=~/android
-          mkdir -p $MOUNT_PATH
-          
-          if [ ! -f "$IMG_PATH" ]; then
-            echo "Creating 300GB Virtual Disk on G-Drive..."
-            truncate -s 300G "$IMG_PATH"
-            mkfs.ext4 "$IMG_PATH"
-          fi
-          
-          echo "Mounting Virtual Disk..."
-          sudo mount -o loop "$IMG_PATH" $MOUNT_PATH
-          sudo chown $(whoami):$(whoami) $MOUNT_PATH
           df -h
 
       - name: Repo Sync
@@ -78,7 +68,6 @@ jobs:
           
           if [ ! -d ".repo" ]; then
             echo "Initializing repo..."
-            # Use the VoltageOS manifest URL
             repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           fi
           
@@ -96,8 +85,8 @@ jobs:
           </manifest>
           EOF
 
-          echo "Syncing source code..."
-          # Removed --quiet to see if any errors happen
+          echo "Syncing source code directly to G-Drive (This will take time)..."
+          # Syncing to FUSE mount is slower but bypasses the 80GB limit
           repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
 
       - name: Build ROM
@@ -105,9 +94,9 @@ jobs:
           export PATH=$PATH:~/bin
           cd ~/android/voltage
           source build/envsetup.sh
-          # Use the target we renamed earlier
           lunch voltage_Tetris-userdebug
           
+          # Use CCACHE on G-Drive
           export USE_CCACHE=1
           export CCACHE_DIR=~/android/ccache
           ccache -M 50G
