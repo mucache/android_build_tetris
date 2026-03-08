@@ -34,35 +34,44 @@ jobs:
         run: |
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
-          
-          # Allow other users to access the mount
           sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
           
-          mkdir -p ~/android
-          
-          # Mount with optimized VFS caching
-          # --vfs-cache-mode writes: Needed for repo to work correctly
-          # --vfs-cache-max-size 50G: Limits local cache so we don't hit the 80GB GitHub limit
-          rclone mount gdrive: ~/android \
+          mkdir -p ~/gdrive_mount
+          # Mount GDrive
+          rclone mount gdrive: ~/gdrive_mount \
             --vfs-cache-mode writes \
-            --vfs-cache-max-size 50G \
-            --buffer-size 64M \
-            --dir-cache-time 1000h \
-            --attr-timeout 1000h \
+            --vfs-cache-max-size 60G \
             --allow-other \
-            --vfs-read-chunk-size 32M \
-            --vfs-read-chunk-size-limit 128M \
             --daemon
           
-          # Wait for mount to appear
+          # Wait for mount
           for i in {1..20}; do
-            if df -h | grep -q "gdrive:"; then
+            if df -h | grep -q "gdrive_mount"; then
               echo "Drive mounted successfully!"
               break
             fi
-            echo "Waiting for mount... ($i/20)"
             sleep 5
           done
+
+      - name: Create and Mount Virtual Disk
+        run: |
+          # We create a 300GB virtual EXT4 disk inside your Google Drive
+          # This allows Symlinks to work. 
+          IMG_PATH=~/gdrive_mount/voltage_disk.img
+          MOUNT_PATH=~/android
+          
+          mkdir -p $MOUNT_PATH
+          
+          if [ ! -f "$IMG_PATH" ]; then
+            echo "Creating 300GB Virtual Disk on G-Drive (this may take a moment)..."
+            # Create a sparse-like file
+            truncate -s 300G "$IMG_PATH"
+            mkfs.ext4 "$IMG_PATH"
+          fi
+          
+          echo "Mounting Virtual Disk..."
+          sudo mount -o loop "$IMG_PATH" $MOUNT_PATH
+          sudo chown $(whoami):$(whoami) $MOUNT_PATH
           df -h
 
       - name: Repo Sync
@@ -71,7 +80,6 @@ jobs:
           cd ~/android
           mkdir -p voltage && cd voltage
           
-          # Only init if not already initialized on G-Drive
           if [ ! -d ".repo" ]; then
             echo "Initializing repo..."
             repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
@@ -82,8 +90,8 @@ jobs:
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <remote name="github" fetch="https://github.com/" />
-
-            <!-- THE EXTERMINATOR: SAVE SPACE ON DRIVE -->
+            
+            <!-- THE EXTERMINATOR -->
             <remove-project name="platform/prebuilts/clang/host/darwin-x86" />
             <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
             <remove-project name="platform/prebuilts/python/darwin-x86" />
@@ -103,8 +111,7 @@ jobs:
           EOF
 
           echo "Syncing source code..."
-          # Sync with progress output to keep GHA runner alive
-          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --quiet || repo sync -c -j1 --force-sync
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --quiet
 
       - name: Build ROM
         run: |
@@ -113,7 +120,6 @@ jobs:
           source build/envsetup.sh
           lunch voltage_Tetris-userdebug
           
-          # Use CCACHE on G-Drive
           export USE_CCACHE=1
           export CCACHE_DIR=~/android/ccache
           ccache -M 50G
@@ -124,7 +130,5 @@ jobs:
         if: success()
         run: |
           cd ~/android/voltage/out/target/product/Tetris
-          # Copy zip to a builds folder on G-Drive
           rclone copy voltage-*.zip gdrive:voltage/builds/ -P
-          # Also provide a temporary link
           curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
