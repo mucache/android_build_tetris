@@ -1,4 +1,4 @@
-name: VoltageOS Build (Stable)
+name: VoltageOS Build (Cloud-Sync)
 
 on:
   workflow_dispatch:
@@ -18,45 +18,33 @@ jobs:
       - name: Setup Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl git wget python3 rclone fuse3 libfuse2
+          sudo apt-get install -y bc build-essential zip curl git wget python3 rclone
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           git config --global user.email "build@example.com"
           git config --global user.name "Builder"
 
-      - name: Setup Rclone & Mount
+      - name: Setup Rclone
         env:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
-          sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
-          
-          mkdir -p ~/android
-          # Mount with strict cache to prevent runner crash
-          rclone mount gdrive: ~/android \
-            --vfs-cache-mode full \
-            --vfs-cache-max-size 40G \
-            --vfs-cache-max-age 1h \
-            --links \
-            --allow-other \
-            --daemon
-          
-          for i in {1..20}; do
-            if df -h | grep -q "/home/runner/android"; then
-              echo "Drive mounted!"
-              break
-            fi
-            sleep 5
-          done
 
-      - name: Repo Sync (Stable)
+      - name: Restore Cache from G-Drive
+        run: |
+          # Restore CCACHE to speed up build
+          mkdir -p ~/.ccache
+          rclone copy gdrive:voltage/ccache ~/.ccache -P || echo "No ccache found."
+
+      - name: Repo Sync (Local Fast)
         run: |
           export PATH=$PATH:~/bin
-          mkdir -p ~/android/voltage && cd ~/android/voltage
+          mkdir -p ~/voltage && cd ~/voltage
           
-          # Use full groups to avoid missing mandatory build scripts
+          # We use local disk for Repo to avoid G-Drive symlink/rename errors
+          # Shallow sync to fit in 80GB
           repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
           mkdir -p .repo/local_manifests
@@ -71,25 +59,31 @@ jobs:
           </manifest>
           EOF
 
-          # Standard sync - slower but includes all mandatory scripts
-          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
+          repo sync -c -j8 --force-sync --no-clone-bundle --no-tags --current-branch
+          df -h
 
       - name: Build ROM
         run: |
           export PATH=$PATH:~/bin
-          cd ~/android/voltage
+          cd ~/voltage
           source build/envsetup.sh
           lunch voltage_Tetris-userdebug
           
           export USE_CCACHE=1
-          export CCACHE_DIR=~/android/ccache
-          ccache -M 50G
+          export CCACHE_DIR=~/.ccache
+          ccache -M 30G
           
           mka bacon -j$(nproc --all)
 
-      - name: Upload Finished ROM
-        if: success()
+      - name: Save Cache & Upload ROM
+        if: always()
         run: |
-          cd ~/android/voltage/out/target/product/Tetris
-          rclone copy voltage-*.zip gdrive:voltage/builds/ -P
-          curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
+          # Save ccache back to G-Drive for next time
+          rclone sync ~/.ccache gdrive:voltage/ccache -P
+          
+          # Upload final ROM if successful
+          if [ -f ~/voltage/out/target/product/Tetris/voltage-*.zip ]; then
+            cd ~/voltage/out/target/product/Tetris
+            rclone copy voltage-*.zip gdrive:voltage/builds/ -P
+            curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
+          fi
