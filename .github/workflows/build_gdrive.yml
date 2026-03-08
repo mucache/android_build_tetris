@@ -91,14 +91,10 @@ jobs:
           <manifest>
             <remote name="github" fetch="https://github.com/" />
             
-            <!-- THE EXTERMINATOR -->
-            <remove-project name="platform/prebuilts/clang/host/darwin-x86" />
-            <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
-            <remove-project name="platform/prebuilts/python/darwin-x86" />
-            <remove-project name="platform/prebuilts/go/darwin-x86" />
+            <!-- THE EXTERMINATOR: KILL HEAVY PROJECTS TO SAVE SPACE -->
+            <!-- These are confirmed heavy projects in most AOSP 15 trees -->
             <remove-project name="platform/device/google/cuttlefish" />
             <remove-project name="platform/prebuilts/android-emulator" />
-            <remove-project name="platform/prebuilts/rust" />
             <remove-project name="platform/external/chromium-webview" />
             <remove-project name="platform/external/pdfium" />
 
