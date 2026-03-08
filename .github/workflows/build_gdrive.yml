@@ -21,46 +21,69 @@ jobs:
       - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 fuse3 libfuse2
           curl -sL https://rclone.org/install.sh | sudo bash
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           
-          # CRITICAL: Git config is required for 'repo init' to work
           git config --global user.email "build@example.com"
           git config --global user.name "Builder"
           git config --global color.ui false
 
-      - name: Setup Rclone
+      - name: Setup Rclone & Mount Drive
         env:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+          
+          # Prepare FUSE
+          sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
+          
+          mkdir -p ~/android
+          # Mount GDrive in background without --daemon to avoid timeout
+          rclone mount gdrive: ~/android --vfs-cache-mode writes --buffer-size 64M --allow-other &
+          
+          # Wait for mount
+          for i in {1..20}; do
+            if df -h | grep -q "gdrive:"; then
+              echo "Drive mounted successfully!"
+              break
+            fi
+            echo "Waiting for mount... ($i/20)"
+            sleep 5
+          done
+          df -h
 
-      - name: Restore Source from G-Drive
-        run: |
-          mkdir -p ~/android/voltage
-          echo "Checking for existing source on Google Drive..."
-          # Use 'copy' instead of 'sync' for the restore to prevent issues if G-Drive is empty
-          rclone copy gdrive:voltage/.repo ~/android/voltage/.repo -P --transfers 32 --checkers 64 || echo "No existing source found, starting fresh."
-
-      - name: Repo Sync
+      - name: Repo Sync (With Exterminator)
         run: |
           export PATH=$PATH:~/bin
-          cd ~/android/voltage
+          cd ~/android
+          mkdir -p voltage && cd voltage
           
-          # Initialize VoltageOS 15
           echo "Initializing repo..."
           repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
           mkdir -p .repo/local_manifests
+          # We use your 'Exterminator' logic to remove huge unneeded projects
           cat <<EOF > .repo/local_manifests/tetris.xml
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <remote name="github" fetch="https://github.com/" />
 
+            <!-- THE EXTERMINATOR: KILL HEAVY PROJECTS TO SAVE SPACE -->
+            <remove-project name="platform/prebuilts/clang/host/darwin-x86" />
+            <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
+            <remove-project name="platform/prebuilts/python/darwin-x86" />
+            <remove-project name="platform/prebuilts/go/darwin-x86" />
+            <remove-project name="platform/device/google/cuttlefish" />
+            <remove-project name="platform/prebuilts/android-emulator" />
+            <remove-project name="platform/prebuilts/rust" />
+            <remove-project name="platform/external/chromium-webview" />
+            <remove-project name="platform/external/pdfium" />
+
+            <!-- Tetris (CMF 1) Projects -->
             <project name="valt-x/device_nothing_tetris" path="device/nothing/Tetris" remote="github" revision="lineage-23.2" />
             <project name="valt-x/android_device_nothing_Tetris-kernel" path="device/nothing/Tetris-kernel" remote="github" revision="lineage-23.2" />
             <project name="valt-x/vendor_nothing_Tetris" path="vendor/nothing/Tetris" remote="github" revision="lineage-23.2" />
@@ -68,8 +91,8 @@ jobs:
           </manifest>
           EOF
 
-          echo "Syncing source code..."
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          echo "Syncing source code directly to G-Drive..."
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
 
       - name: Build ROM
         run: |
@@ -83,18 +106,6 @@ jobs:
           ccache -M 50G
           
           mka bacon -j$(nproc --all)
-
-      - name: Save Progress to G-Drive
-        if: always() 
-        run: |
-          echo "Uploading changes back to Google Drive..."
-          # Only attempt sync if the directories exist
-          if [ -d "~/android/voltage/.repo" ]; then
-            rclone sync ~/android/voltage/.repo gdrive:voltage/.repo -P --transfers 32 --checkers 64
-          fi
-          if [ -d "~/android/ccache" ]; then
-            rclone sync ~/android/ccache gdrive:voltage/ccache -P --transfers 32 --checkers 64
-          fi
 
       - name: Upload Finished ROM
         if: success()
