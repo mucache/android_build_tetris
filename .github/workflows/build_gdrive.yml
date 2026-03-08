@@ -21,7 +21,9 @@ jobs:
       - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 rclone fuse
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 fuse3 libfuse2
+          # Install LATEST Rclone
+          curl -sL https://rclone.org/install.sh | sudo bash
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
@@ -31,12 +33,31 @@ jobs:
           RCLONE_CONF: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          # Using printf is safer for long secrets with special characters
+          printf "%s" "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          
+          # Verify the config is valid before proceeding
+          if ! rclone listremotes | grep -q "gdrive:"; then
+            echo "ERROR: Rclone config is invalid or remote 'gdrive' not found!"
+            cat ~/.config/rclone/rclone.conf # This will be masked in logs, but helps debugging
+            exit 1
+          fi
+
           mkdir -p ~/android
-          # Mount GDrive. 'gdrive:' must match the name you gave in rclone config
-          rclone mount gdrive: ~/android --daemon --vfs-cache-mode writes --buffer-size 64M
-          sleep 5
-          df -h # Check if it mounted
+          # Mount GDrive. We use --daemon to run in background.
+          # Added fuse options for better compatibility in GHA
+          rclone mount gdrive: ~/android --daemon --vfs-cache-mode writes --buffer-size 64M --vfs-read-chunk-size 32M --allow-other
+          
+          # Wait for mount to stabilize
+          for i in {1..10}; do
+            if df -h | grep -q "gdrive:"; then
+              echo "Drive mounted successfully!"
+              break
+            fi
+            echo "Waiting for mount... ($i/10)"
+            sleep 3
+          done
+          df -h
 
       - name: Repo Sync
         run: |
