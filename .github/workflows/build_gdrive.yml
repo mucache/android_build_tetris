@@ -1,4 +1,4 @@
-name: VoltageOS Build (Cloud-Sync)
+name: VoltageOS Build (Drive-Storage)
 
 on:
   workflow_dispatch:
@@ -18,33 +18,62 @@ jobs:
       - name: Setup Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl git wget python3 rclone
+          sudo apt-get install -y bc build-essential zip curl git wget python3 rclone fuse3 libfuse2
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           git config --global user.email "build@example.com"
           git config --global user.name "Builder"
 
-      - name: Setup Rclone
+      - name: Setup Rclone & Mount
         env:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+          sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
+          
+          mkdir -p ~/gdrive_raw
+          # Mount GDrive with strict cache limit to stay under 80GB
+          rclone mount gdrive: ~/gdrive_raw \
+            --vfs-cache-mode full \
+            --vfs-cache-max-size 25G \
+            --vfs-cache-max-age 1h \
+            --allow-other \
+            --daemon
+          
+          for i in {1..20}; do
+            if df -h | grep -q "gdrive_raw"; then
+              echo "G-Drive Raw Mounted!"
+              break
+            fi
+            sleep 5
+          done
 
-      - name: Restore Cache from G-Drive
+      - name: Mount Virtual EXT4 Disk
         run: |
-          # Restore CCACHE to speed up build
-          mkdir -p ~/.ccache
-          rclone copy gdrive:voltage/ccache ~/.ccache -P || echo "No ccache found."
+          # We use a loopback image STORED on G-Drive. 
+          # This provides EXT4 (Symlinks/Renames) power but 300GB size.
+          IMG_PATH=~/gdrive_raw/voltage_work.img
+          MOUNT_PATH=~/android
+          mkdir -p $MOUNT_PATH
+          
+          if [ ! -f "$IMG_PATH" ]; then
+            echo "Creating 300GB EXT4 Image on Drive..."
+            truncate -s 300G "$IMG_PATH"
+            mkfs.ext4 -E lazy_itable_init=1,lazy_journal_init=1 "$IMG_PATH"
+          fi
+          
+          sudo mount -o loop "$IMG_PATH" $MOUNT_PATH
+          sudo chown $(whoami):$(whoami) $MOUNT_PATH
+          df -h
 
-      - name: Repo Sync (Local Fast)
+      - name: Repo Sync
         run: |
           export PATH=$PATH:~/bin
-          mkdir -p ~/voltage && cd ~/voltage
+          mkdir -p ~/android/voltage && cd ~/android/voltage
           
-          # We use local disk for Repo to avoid G-Drive symlink/rename errors
-          # Shallow sync to fit in 80GB
+          # This now runs on the 300GB EXT4 Virtual Disk
           repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
           mkdir -p .repo/local_manifests
@@ -59,31 +88,24 @@ jobs:
           </manifest>
           EOF
 
-          repo sync -c -j8 --force-sync --no-clone-bundle --no-tags --current-branch
-          df -h
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch
 
       - name: Build ROM
         run: |
           export PATH=$PATH:~/bin
-          cd ~/voltage
+          cd ~/android/voltage
           source build/envsetup.sh
           lunch voltage_Tetris-userdebug
           
           export USE_CCACHE=1
-          export CCACHE_DIR=~/.ccache
-          ccache -M 30G
+          export CCACHE_DIR=~/android/ccache
+          ccache -M 50G
           
           mka bacon -j$(nproc --all)
 
-      - name: Save Cache & Upload ROM
-        if: always()
+      - name: Upload Finished ROM
+        if: success()
         run: |
-          # Save ccache back to G-Drive for next time
-          rclone sync ~/.ccache gdrive:voltage/ccache -P
-          
-          # Upload final ROM if successful
-          if [ -f ~/voltage/out/target/product/Tetris/voltage-*.zip ]; then
-            cd ~/voltage/out/target/product/Tetris
-            rclone copy voltage-*.zip gdrive:voltage/builds/ -P
-            curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
-          fi
+          cd ~/android/voltage/out/target/product/Tetris
+          rclone copy voltage-*.zip gdrive:voltage/builds/ -P
+          curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
