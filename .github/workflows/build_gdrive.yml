@@ -1,0 +1,86 @@
+name: VoltageOS Build (2TB G-Drive)
+
+on:
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free Up Local Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 rclone fuse
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+
+      - name: Setup Rclone & Mount Drive
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          mkdir -p ~/android
+          # Mount GDrive. 'gdrive:' must match the name you gave in rclone config
+          rclone mount gdrive: ~/android --daemon --vfs-cache-mode writes --buffer-size 64M
+          sleep 5
+          df -h # Check if it mounted
+
+      - name: Repo Sync
+        run: |
+          export PATH=$PATH:~/bin
+          cd ~/android
+          mkdir -p voltage && cd voltage
+          
+          # Initialize VoltageOS 15 (Android 15)
+          repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
+          
+          # Add Tetris (CMF 1) Local Manifest
+          mkdir -p .repo/local_manifests
+          cat <<EOF > .repo/local_manifests/tetris.xml
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+            <project name="valt-x/device_nothing_tetris" path="device/nothing/Tetris" remote="github" revision="lineage-23.2" />
+            <project name="valt-x/android_device_nothing_Tetris-kernel" path="device/nothing/Tetris-kernel" remote="github" revision="lineage-23.2" />
+            <project name="valt-x/vendor_nothing_Tetris" path="vendor/nothing/Tetris" remote="github" revision="lineage-23.2" />
+            <project name="SuperAviation001/android_hardware_mediatek" path="hardware/mediatek" remote="github" revision="lineage-22.2" />
+          </manifest>
+          EOF
+
+          # Sync (This writes directly to your 2TB G-Drive)
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Build ROM
+        run: |
+          export PATH=$PATH:~/bin
+          cd ~/android/voltage
+          source build/envsetup.sh
+          
+          # Use the target name from your tree
+          lunch lineage_Tetris-userdebug
+          
+          # Use CCACHE to save progress between builds
+          export USE_CCACHE=1
+          export CCACHE_DIR=~/android/ccache
+          ccache -M 50G
+          
+          mka bacon -j$(nproc --all)
+
+      - name: Upload ROM
+        if: success()
+        run: |
+          cd ~/android/voltage/out/target/product/Tetris
+          # Upload the zip to a free hosting site
+          curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
