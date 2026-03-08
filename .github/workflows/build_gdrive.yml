@@ -1,7 +1,7 @@
 name: VoltageOS Build (2TB G-Drive)
 
 on:
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,53 +21,35 @@ jobs:
       - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 fuse3 libfuse2
-          # Install LATEST Rclone
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3
           curl -sL https://rclone.org/install.sh | sudo bash
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
 
-      - name: Setup Rclone & Mount Drive
+      - name: Setup Rclone
         env:
           RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
-          # Decode the Base64 secret into the config file
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
-          
-          # Verify the config is valid before proceeding
-          if ! rclone listremotes | grep -q "gdrive:"; then
-            echo "ERROR: Rclone config is invalid or remote 'gdrive' not found!"
-            exit 1
-          fi
 
-          mkdir -p ~/android
-          # Mount GDrive. We use --daemon to run in background.
-          # Added fuse options for better compatibility in GHA
-          rclone mount gdrive: ~/android --daemon --vfs-cache-mode writes --buffer-size 64M --vfs-read-chunk-size 32M --allow-other
-          
-          # Wait for mount to stabilize
-          for i in {1..10}; do
-            if df -h | grep -q "gdrive:"; then
-              echo "Drive mounted successfully!"
-              break
-            fi
-            echo "Waiting for mount... ($i/10)"
-            sleep 3
-          done
-          df -h
+      - name: Restore Source from G-Drive
+        run: |
+          mkdir -p ~/android/voltage
+          # Only sync the .repo folder to save time and space
+          # This allows us to "resume" the sync on the VM's local disk
+          echo "Restoring .repo from Google Drive..."
+          rclone sync gdrive:voltage/.repo ~/android/voltage/.repo -P --transfers 32 --checkers 64
 
       - name: Repo Sync
         run: |
           export PATH=$PATH:~/bin
-          cd ~/android
-          mkdir -p voltage && cd voltage
+          cd ~/android/voltage
           
-          # Initialize VoltageOS 15 (Android 15)
+          # Re-init in case of manifest changes
           repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
-          # Add Tetris (CMF 1) Local Manifest
           mkdir -p .repo/local_manifests
           cat <<EOF > .repo/local_manifests/tetris.xml
           <?xml version="1.0" encoding="UTF-8"?>
@@ -79,7 +61,7 @@ jobs:
           </manifest>
           EOF
 
-          # Sync (This writes directly to your 2TB G-Drive)
+          # Sync locally (Fastest way)
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Build ROM
@@ -87,20 +69,27 @@ jobs:
           export PATH=$PATH:~/bin
           cd ~/android/voltage
           source build/envsetup.sh
+          lunch voltage_Tetris-userdebug
           
-          # Use the target name from your tree
-          lunch lineage_Tetris-userdebug
-          
-          # Use CCACHE to save progress between builds
+          # Use local CCACHE for this session
           export USE_CCACHE=1
           export CCACHE_DIR=~/android/ccache
           ccache -M 50G
           
           mka bacon -j$(nproc --all)
 
-      - name: Upload ROM
+      - name: Save Progress to G-Drive
+        if: always() # Run even if build fails so we don't lose synced code
+        run: |
+          echo "Uploading changes back to Google Drive..."
+          # Sync back the .repo and ccache to G-Drive for the next build
+          rclone sync ~/android/voltage/.repo gdrive:voltage/.repo -P --transfers 32 --checkers 64
+          rclone sync ~/android/ccache gdrive:voltage/ccache -P --transfers 32 --checkers 64
+
+      - name: Upload Finished ROM
         if: success()
         run: |
           cd ~/android/voltage/out/target/product/Tetris
-          # Upload the zip to a free hosting site
+          # Upload the final zip
+          rclone copy voltage-*.zip gdrive:voltage/builds/ -P
           curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
