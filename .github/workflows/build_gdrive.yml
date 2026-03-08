@@ -63,13 +63,11 @@ jobs:
       - name: Repo Sync
         run: |
           export PATH=$PATH:~/bin
-          cd ~/android
-          mkdir -p voltage && cd voltage
+          mkdir -p ~/android/voltage && cd ~/android/voltage
           
-          if [ ! -d ".repo" ]; then
-            echo "Initializing repo..."
-            repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
-          fi
+          echo "Initializing repo..."
+          # Always run init to ensure repo is 'installed' in this folder
+          repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
           mkdir -p .repo/local_manifests
           cat <<EOF > .repo/local_manifests/tetris.xml
