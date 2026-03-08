@@ -12,11 +12,8 @@ jobs:
 
       - name: Free Up Local Space
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
 
       - name: Install Build Tools
         run: |
@@ -38,14 +35,26 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
           
-          # Prepare FUSE
+          # Allow other users to access the mount
           sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
           
           mkdir -p ~/android
-          # Mount GDrive in background without --daemon to avoid timeout
-          rclone mount gdrive: ~/android --vfs-cache-mode writes --buffer-size 64M --allow-other &
           
-          # Wait for mount
+          # Mount with optimized VFS caching
+          # --vfs-cache-mode writes: Needed for repo to work correctly
+          # --vfs-cache-max-size 50G: Limits local cache so we don't hit the 80GB GitHub limit
+          rclone mount gdrive: ~/android \
+            --vfs-cache-mode writes \
+            --vfs-cache-max-size 50G \
+            --buffer-size 64M \
+            --dir-cache-time 1000h \
+            --attr-timeout 1000h \
+            --allow-other \
+            --vfs-read-chunk-size 32M \
+            --vfs-read-chunk-size-limit 128M \
+            --daemon
+          
+          # Wait for mount to appear
           for i in {1..20}; do
             if df -h | grep -q "gdrive:"; then
               echo "Drive mounted successfully!"
@@ -56,23 +65,25 @@ jobs:
           done
           df -h
 
-      - name: Repo Sync (With Exterminator)
+      - name: Repo Sync
         run: |
           export PATH=$PATH:~/bin
           cd ~/android
           mkdir -p voltage && cd voltage
           
-          echo "Initializing repo..."
-          repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
+          # Only init if not already initialized on G-Drive
+          if [ ! -d ".repo" ]; then
+            echo "Initializing repo..."
+            repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
+          fi
           
           mkdir -p .repo/local_manifests
-          # We use your 'Exterminator' logic to remove huge unneeded projects
           cat <<EOF > .repo/local_manifests/tetris.xml
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <remote name="github" fetch="https://github.com/" />
 
-            <!-- THE EXTERMINATOR: KILL HEAVY PROJECTS TO SAVE SPACE -->
+            <!-- THE EXTERMINATOR: SAVE SPACE ON DRIVE -->
             <remove-project name="platform/prebuilts/clang/host/darwin-x86" />
             <remove-project name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" />
             <remove-project name="platform/prebuilts/python/darwin-x86" />
@@ -91,8 +102,9 @@ jobs:
           </manifest>
           EOF
 
-          echo "Syncing source code directly to G-Drive..."
-          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
+          echo "Syncing source code..."
+          # Sync with progress output to keep GHA runner alive
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --quiet || repo sync -c -j1 --force-sync
 
       - name: Build ROM
         run: |
@@ -101,6 +113,7 @@ jobs:
           source build/envsetup.sh
           lunch voltage_Tetris-userdebug
           
+          # Use CCACHE on G-Drive
           export USE_CCACHE=1
           export CCACHE_DIR=~/android/ccache
           ccache -M 50G
@@ -111,5 +124,7 @@ jobs:
         if: success()
         run: |
           cd ~/android/voltage/out/target/product/Tetris
+          # Copy zip to a builds folder on G-Drive
           rclone copy voltage-*.zip gdrive:voltage/builds/ -P
+          # Also provide a temporary link
           curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
