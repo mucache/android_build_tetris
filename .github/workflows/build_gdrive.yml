@@ -36,37 +36,53 @@ jobs:
           echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
           sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
           
-          mkdir -p ~/android
-          
-          # Mount GDrive with --links to support symlinks directly on GDrive
-          # --vfs-cache-mode full: Required for random access
-          # --vfs-cache-max-size 25G: Keeps the local cache small so the runner doesn't crash
-          rclone mount gdrive: ~/android \
+          mkdir -p ~/gdrive_mount
+          # Mount GDrive
+          # --vfs-cache-max-size 20G: Strict limit to avoid "No space left on device" on the 80GB runner
+          rclone mount gdrive: ~/gdrive_mount \
             --vfs-cache-mode full \
-            --vfs-cache-max-size 25G \
+            --vfs-cache-max-size 20G \
             --vfs-cache-max-age 1h \
-            --links \
             --allow-other \
             --buffer-size 64M \
             --daemon
           
           # Wait for mount
           for i in {1..20}; do
-            if df -h | grep -q "/home/runner/android"; then
+            if df -h | grep -q "gdrive_mount"; then
               echo "Drive mounted successfully!"
               break
             fi
             sleep 5
           done
+
+      - name: Create and Mount Virtual Disk
+        run: |
+          # We use a loopback image to provide a "real" Linux filesystem on top of G-Drive
+          IMG_PATH=~/gdrive_mount/voltage_disk.img
+          MOUNT_PATH=~/android
+          mkdir -p $MOUNT_PATH
+          
+          if [ ! -f "$IMG_PATH" ]; then
+            echo "Creating 300GB Virtual Disk on G-Drive..."
+            truncate -s 300G "$IMG_PATH"
+            # -E lazy_itable_init=1,lazy_journal_init=1: Speeds up formatting and reduces initial writes
+            mkfs.ext4 -E lazy_itable_init=1,lazy_journal_init=1 "$IMG_PATH"
+          fi
+          
+          echo "Mounting Virtual Disk..."
+          sudo mount -o loop "$IMG_PATH" $MOUNT_PATH
+          sudo chown $(whoami):$(whoami) $MOUNT_PATH
           df -h
 
       - name: Repo Sync
         run: |
           export PATH=$PATH:~/bin
-          mkdir -p ~/android/voltage && cd ~/android/voltage
+          cd ~/android
+          mkdir -p voltage && cd voltage
           
+          # repo init MUST happen inside the loopback mount (which supports symlinks/renames)
           echo "Initializing repo..."
-          # Always run init to ensure repo is 'installed' in this folder
           repo init -u https://github.com/VoltageOS/manifest.git -b 15 --depth=1
           
           mkdir -p .repo/local_manifests
@@ -83,8 +99,7 @@ jobs:
           </manifest>
           EOF
 
-          echo "Syncing source code directly to G-Drive (This will take time)..."
-          # Syncing to FUSE mount is slower but bypasses the 80GB limit
+          echo "Syncing source code..."
           repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
 
       - name: Build ROM
@@ -92,9 +107,9 @@ jobs:
           export PATH=$PATH:~/bin
           cd ~/android/voltage
           source build/envsetup.sh
+          # Use the voltage_Tetris target we created
           lunch voltage_Tetris-userdebug
           
-          # Use CCACHE on G-Drive
           export USE_CCACHE=1
           export CCACHE_DIR=~/android/ccache
           ccache -M 50G
@@ -105,5 +120,6 @@ jobs:
         if: success()
         run: |
           cd ~/android/voltage/out/target/product/Tetris
+          # Copy to G-Drive (outside the virtual disk for easy access)
           rclone copy voltage-*.zip gdrive:voltage/builds/ -P
           curl -s --upload-file voltage-*.zip https://transfer.sh/voltage-tetris.zip
